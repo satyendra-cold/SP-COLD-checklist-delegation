@@ -827,58 +827,71 @@ function AccountDataPage() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          {/* Title */}
           <h1 className="text-2xl font-bold tracking-tight text-purple-700">
             {showHistory ? CONFIG.PAGE_CONFIG.historyTitle : CONFIG.PAGE_CONFIG.title}
           </h1>
-          <div className="flex space-x-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+
+          {/* Right side controls */}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:space-x-4">
+            {/* Search box */}
+            <div className="relative w-full sm:w-64">
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={18}
+              />
               <input
                 type="text"
                 placeholder={showHistory ? "Search history..." : "Search tasks..."}
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2 border border-purple-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                className="w-full pl-10 pr-4 py-2 border border-purple-200 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               />
             </div>
+
+            {/* Toggle History Button */}
             <button
               onClick={toggleHistory}
-              className="rounded-md bg-gradient-to-r from-blue-500 to-indigo-600 py-2 px-4 text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="rounded-md bg-gradient-to-r from-blue-500 to-indigo-600 py-2 px-4 text-white hover:from-blue-600 hover:to-indigo-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 w-full sm:w-auto"
             >
               {showHistory ? (
-                <div className="flex items-center">
+                <div className="flex items-center justify-center sm:justify-start">
                   <ArrowLeft className="h-4 w-4 mr-1" />
                   <span>Back to Tasks</span>
                 </div>
               ) : (
-                <div className="flex items-center">
+                <div className="flex items-center justify-center sm:justify-start">
                   <History className="h-4 w-4 mr-1" />
                   <span>View History</span>
                 </div>
               )}
             </button>
+
+            {/* Submit Button */}
             {!showHistory && (
               <button
                 onClick={handleSubmit}
                 disabled={selectedItemsCount === 0 || isSubmitting}
-                className="rounded-md bg-gradient-to-r from-purple-600 to-pink-600 py-2 px-4 text-white hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="rounded-md bg-gradient-to-r from-purple-600 to-pink-600 py-2 px-4 text-white hover:from-purple-700 hover:to-pink-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
               >
-                {isSubmitting ? "Processing..." : `Submit Selected (${selectedItemsCount})`}
+                {isSubmitting
+                  ? "Processing..."
+                  : `Submit Selected (${selectedItemsCount})`}
               </button>
             )}
 
-            {/* NEW: Admin Submit Button for History View */}
+            {/* Admin Submit Button */}
             {showHistory && userRole === "admin" && selectedHistoryItems.length > 0 && (
-              <div className="fixed top-40 right-10 z-50">
-                <button
-                  onClick={handleMarkMultipleDone}
-                  disabled={markingAsDone}
-                  className="rounded-md bg-green-600 text-white px-4 py-2 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {markingAsDone ? "Processing..." : `Mark ${selectedHistoryItems.length} Items as Admin Done`}
-                </button>
-              </div>
+              <button
+                onClick={handleMarkMultipleDone}
+                disabled={markingAsDone}
+                className="rounded-md bg-green-600 text-white px-4 py-2 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed w-full sm:w-auto"
+              >
+                {markingAsDone
+                  ? "Processing..."
+                  : `Mark ${selectedHistoryItems.length} Items as Admin Done`}
+              </button>
             )}
           </div>
         </div>
