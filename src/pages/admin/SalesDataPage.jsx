@@ -41,7 +41,7 @@ function AccountDataPage() {
   const [username, setUsername] = useState("")
   const [editingId, setEditingId] = useState(null)
   const [editDescription, setEditDescription] = useState("")
-
+const [editStartDate, setEditStartDate] = useState("")
   // NEW: Admin history selection states
   const [selectedHistoryItems, setSelectedHistoryItems] = useState([])
   const [markingAsDone, setMarkingAsDone] = useState(false)
@@ -80,70 +80,97 @@ function AccountDataPage() {
     setUsername(user || "")
   }, [])
 
+const handleEdit = useCallback((id, currentDescription, currentStartDate) => {
+  setEditingId(id);
+  setEditDescription(currentDescription || "");
+  
+  // Convert to datetime-local format for input
+  const convertedDate = convertDisplayFormatToDateTimeLocal(currentStartDate);
+  setEditStartDate(convertedDate);
+}, []);
 
 
-  // NEW: Edit and Delete handlers
-  const handleEdit = useCallback((id, currentDescription) => {
-    setEditingId(id)
-    setEditDescription(currentDescription)
-  }, [])
+const handleEditDescription = useCallback((id, currentDescription) => {
+  setEditingId(id);
+  setEditDescription(currentDescription || "");
+  setEditStartDate(""); // Don't touch date when editing description only
+}, []);
 
-  const handleSaveEdit = useCallback(async (id) => {
-    // Step 1: Save old data for rollback
-    const oldData = [...accountData];
+const handleSaveEdit = useCallback(async (id) => {
+  try {
+    const item = accountData.find(item => item._id === id);
+    if (!item) throw new Error("Item not found for given ID: " + id);
 
-    try {
-      const item = accountData.find(item => item._id === id);
-      if (!item) throw new Error("Item not found for given ID: " + id);
+    const formattedDate = convertDateTimeLocalToDisplayFormat(editStartDate);
 
-      const rowDataArray = [{
-        rowIndex: item._rowIndex,
-        taskId: item.col1,               // backend ke liye taskId
-        taskDescription: editDescription // Column F update (col5)
-      }];
+    // ✅ पहले frontend state update करो - row गायब नहीं होगी
+    setAccountData(prev =>
+      prev.map(row =>
+        row._id === id ? { 
+          ...row, 
+          col5: editDescription, 
+          col6: formattedDate  // तुरंत update कर दो
+        } : row
+      )
+    );
 
-      // Step 2: Update frontend state immediately
-      setAccountData(prev =>
-        prev.map(row =>
-          row._id === id ? { ...row, col5: editDescription } : row
-        )
-      );
-      setEditingId(null);
-      setEditDescription("");
+    setEditingId(null);
+    setEditDescription("");
+    setEditStartDate("");
+    setSuccessMessage("Task updated successfully!");
 
-      // Step 3: Send request to backend
-      const formData = new FormData();
-      formData.append("action", "updateTaskData");
-      formData.append("sheetName", CONFIG.SHEET_NAME);
-      formData.append("rowData", JSON.stringify(rowDataArray));
+    // ✅ अब backend को quietly update करो
+    const rowDataArray = [{
+      rowIndex: item._rowIndex,
+      taskId: item.col1,
+      taskDescription: editDescription,
+      taskStartDate: formattedDate
+    }];
 
-      const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
-        method: "POST",
-        body: formData
+    const formData = new FormData();
+    formData.append("action", "updateTaskData");
+    formData.append("sheetName", CONFIG.SHEET_NAME);
+    formData.append("rowData", JSON.stringify(rowDataArray));
+
+    // Background में save करो
+    fetch(CONFIG.APPS_SCRIPT_URL, {
+      method: "POST",
+      body: formData
+    }).then(response => response.json())
+      .then(result => {
+        if (!result.success) {
+          console.error("Background save failed:", result.message);
+          // अगर fail हो तो original value restore करो
+          setAccountData(prev =>
+            prev.map(row =>
+              row._id === id ? { 
+                ...row, 
+                col5: item.col5,  // original description
+                col6: item.col6   // original date
+              } : row
+            )
+          );
+          alert("Failed to save to Google Sheets: " + result.message);
+        }
+      })
+      .catch(error => {
+        console.error("Error saving to backend:", error);
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        setSuccessMessage("Task updated successfully!");
-      } else {
-        throw new Error(result.message || "Failed to update task");
-      }
-
-    } catch (error) {
-      console.error("Error updating task:", error);
-      alert("Failed to update task: " + error.message);
-
-      // Step 4: Rollback on failure
-      setAccountData(oldData);
-    }
-  }, [editDescription, accountData]);
-
-  const handleCancelEdit = useCallback(() => {
-    setEditingId(null)
-    setEditDescription("")
-  }, [])
-
+  } catch (error) {
+    console.error("Error updating task:", error);
+    alert("Failed to update task: " + error.message);
+    
+    setEditingId(null);
+    setEditDescription("");
+    setEditStartDate("");
+  }
+}, [editDescription, editStartDate, accountData]);
+const handleCancelEdit = useCallback(() => {
+  setEditingId(null)
+  setEditDescription("")
+  setEditStartDate("") // NEW
+}, [])
   const handleDelete = useCallback(async (id, isHistory = false) => {
     if (!confirm("Are you sure you want to delete this task?")) return
 
@@ -178,7 +205,39 @@ function AccountDataPage() {
     }
   }, [accountData, historyData])
 
+const convertDateTimeLocalToDisplayFormat = (datetimeLocalValue) => {
+  if (!datetimeLocalValue) return "";
+  
+  const date = new Date(datetimeLocalValue);
+  const day = date.getDate().toString().padStart(2, "0");
+  const month = (date.getMonth() + 1).toString().padStart(2, "0");
+  const year = date.getFullYear();
+  const hours = date.getHours().toString().padStart(2, "0");
+  const minutes = date.getMinutes().toString().padStart(2, "0");
+  const seconds = date.getSeconds().toString().padStart(2, "0");
+  
+  return `${day}/${month}/${year} ${hours}:${minutes}:${seconds}`;
+};
 
+// Also add this function to convert DD/MM/YYYY format to datetime-local format for editing
+const convertDisplayFormatToDateTimeLocal = (displayFormat) => {
+  if (!displayFormat) return "";
+  
+  try {
+    // Extract date part if it includes time
+    const datePart = displayFormat.includes(" ") ? displayFormat.split(" ")[0] : displayFormat;
+    const timePart = displayFormat.includes(" ") ? displayFormat.split(" ")[1] : "00:00:00";
+    
+    const [day, month, year] = datePart.split("/");
+    const [hours, minutes] = timePart.split(":");
+    
+    // Create ISO string for datetime-local input (YYYY-MM-DDTHH:MM)
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes.padStart(2, "0")}`;
+  } catch (error) {
+    console.error("Error converting date format:", error);
+    return "";
+  }
+};
 
 
   // UPDATED: Parse Google Sheets date-time to handle DD/MM/YYYY HH:MM:SS format
@@ -229,16 +288,16 @@ function AccountDataPage() {
     if (parts.length !== 3) return null
     return new Date(parts[2], parts[1] - 1, parts[0])
   }
-
-  const sortDateWise = (a, b) => {
-    const dateStrA = a["col6"] || ""
-    const dateStrB = b["col6"] || ""
-    const dateA = parseDateFromDDMMYYYY(dateStrA)
-    const dateB = parseDateFromDDMMYYYY(dateStrB)
-    if (!dateA) return 1
-    if (!dateB) return -1
-    return dateA.getTime() - dateB.getTime()
-  }
+const sortDateWise = (a, b) => {
+  // ✅ FIX: Only use col6, don't check for editedStartDate
+  const dateStrA = a["col6"] || ""
+  const dateStrB = b["col6"] || ""
+  const dateA = parseDateFromDDMMYYYY(dateStrA)
+  const dateB = parseDateFromDDMMYYYY(dateStrB)
+  if (!dateA) return 1
+  if (!dateB) return -1
+  return dateA.getTime() - dateB.getTime()
+}
 
   const resetFilters = () => {
     setSearchTerm("")
@@ -446,162 +505,175 @@ function AccountDataPage() {
     }
   }
 
-  // UPDATED: fetchSheetData - Include all history rows regardless of Column P status
-  const fetchSheetData = useCallback(async () => {
+ // ✅ UPDATED fetchSheetData
+const fetchSheetData = useCallback(async () => {
+  try {
+    setLoading(true)
+    const pendingAccounts = []
+    const historyRows = []
+
+    const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?sheet=${CONFIG.SHEET_NAME}&action=fetch`)
+    if (!response.ok) {
+      throw new Error(`Failed to fetch data: ${response.status}`)
+    }
+
+    const text = await response.text()
+    let data
     try {
-      setLoading(true)
-      const pendingAccounts = []
-      const historyRows = []
-      const response = await fetch(`${CONFIG.APPS_SCRIPT_URL}?sheet=${CONFIG.SHEET_NAME}&action=fetch`)
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.status}`)
+      data = JSON.parse(text)
+    } catch (parseError) {
+      const jsonStart = text.indexOf("{")
+      const jsonEnd = text.lastIndexOf("}")
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const jsonString = text.substring(jsonStart, jsonEnd + 1)
+        data = JSON.parse(jsonString)
+      } else {
+        throw new Error("Invalid JSON response from server")
       }
-      const text = await response.text()
-      let data
-      try {
-        data = JSON.parse(text)
-      } catch (parseError) {
-        const jsonStart = text.indexOf("{")
-        const jsonEnd = text.lastIndexOf("}")
-        if (jsonStart !== -1 && jsonEnd !== -1) {
-          const jsonString = text.substring(jsonStart, jsonEnd + 1)
-          data = JSON.parse(jsonString)
+    }
+
+    const currentUsername = sessionStorage.getItem("username")
+    const currentUserRole = sessionStorage.getItem("role")
+
+    const today = new Date()
+    const tomorrow = new Date(today)
+    tomorrow.setDate(today.getDate() + 1)
+
+    const todayStr = formatDateToDDMMYYYY(today)
+    const tomorrowStr = formatDateToDDMMYYYY(tomorrow)
+    console.log("Filtering dates:", { todayStr, tomorrowStr })
+
+    const membersSet = new Set()
+    let rows = []
+
+    if (data.table && data.table.rows) {
+      rows = data.table.rows
+    } else if (Array.isArray(data)) {
+      rows = data
+    } else if (data.values) {
+      rows = data.values.map((row) => ({ c: row.map((val) => ({ v: val })) }))
+    }
+
+    rows.forEach((row, rowIndex) => {
+      if (rowIndex === 0) return // skip header
+
+      let rowValues = []
+      if (row.c) {
+        rowValues = row.c.map((cell) => (cell && cell.v !== undefined ? cell.v : ""))
+      } else if (Array.isArray(row)) {
+        rowValues = row
+      } else {
+        console.log("Unknown row format:", row)
+        return
+      }
+
+      const assignedTo = rowValues[4] || "Unassigned"
+      membersSet.add(assignedTo)
+
+      const isUserMatch =
+        currentUserRole === "admin" || assignedTo.toLowerCase() === currentUsername.toLowerCase()
+      if (!isUserMatch && currentUserRole !== "admin") return
+
+      const columnGValue = rowValues[6] // Task Start Date
+      const columnKValue = rowValues[10] // Actual Date
+      const columnMValue = rowValues[12] // Status
+      const columnPValue = rowValues[15] // Admin Processed Date
+
+      // skip DONE tasks for pending only
+      if (columnMValue && columnMValue.toString().trim() === "DONE") {
+        return
+      }
+
+      const rowDateStr = columnGValue ? String(columnGValue).trim() : ""
+      const formattedRowDate = parseGoogleSheetsDateTime(rowDateStr)
+      const googleSheetsRowIndex = rowIndex + 1
+
+      const taskId = rowValues[1] || ""
+      const stableId = taskId
+        ? `task_${taskId}_${googleSheetsRowIndex}`
+        : `row_${googleSheetsRowIndex}_${Math.random().toString(36).substring(2, 15)}`
+
+      const rowData = {
+        _id: stableId,
+        _rowIndex: googleSheetsRowIndex,
+        _taskId: taskId,
+      }
+
+      const columnHeaders = [
+        { id: "col0", label: "Timestamp", type: "string" },
+        { id: "col1", label: "Task ID", type: "string" },
+        { id: "col2", label: "Firm", type: "string" },
+        { id: "col3", label: "Given By", type: "string" },
+        { id: "col4", label: "Name", type: "string" },
+        { id: "col5", label: "Task Description", type: "string" },
+        { id: "col6", label: "Task Start Date", type: "datetime" },
+        { id: "col7", label: "Freq", type: "string" },
+        { id: "col8", label: "Enable Reminders", type: "string" },
+        { id: "col9", label: "Require Attachment", type: "string" },
+        { id: "col10", label: "Actual", type: "datetime" },
+        { id: "col11", label: "Column L", type: "string" },
+        { id: "col12", label: "Status", type: "string" },
+        { id: "col13", label: "Remarks", type: "string" },
+        { id: "col14", label: "Uploaded Image", type: "string" },
+        { id: "col15", label: "Admin Done", type: "string" },
+      ]
+
+      columnHeaders.forEach((header, index) => {
+        const cellValue = rowValues[index]
+        if (
+          header.type === "datetime" ||
+          header.type === "date" ||
+          (cellValue && String(cellValue).startsWith("Date("))
+        ) {
+          rowData[header.id] = cellValue ? parseGoogleSheetsDateTime(String(cellValue)) : ""
+        } else if (header.type === "number" && cellValue !== null && cellValue !== "") {
+          rowData[header.id] = cellValue
         } else {
-          throw new Error("Invalid JSON response from server")
-        }
-      }
-
-      const currentUsername = sessionStorage.getItem("username")
-      const currentUserRole = sessionStorage.getItem("role")
-      const today = new Date()
-      const tomorrow = new Date(today)
-      tomorrow.setDate(today.getDate() + 1)
-      const todayStr = formatDateToDDMMYYYY(today)
-      const tomorrowStr = formatDateToDDMMYYYY(tomorrow)
-      console.log("Filtering dates:", { todayStr, tomorrowStr })
-
-      const membersSet = new Set()
-      let rows = []
-      if (data.table && data.table.rows) {
-        rows = data.table.rows
-      } else if (Array.isArray(data)) {
-        rows = data
-      } else if (data.values) {
-        rows = data.values.map((row) => ({ c: row.map((val) => ({ v: val })) }))
-      }
-
-      rows.forEach((row, rowIndex) => {
-        if (rowIndex === 0) return
-        let rowValues = []
-        if (row.c) {
-          rowValues = row.c.map((cell) => (cell && cell.v !== undefined ? cell.v : ""))
-        } else if (Array.isArray(row)) {
-          rowValues = row
-        } else {
-          console.log("Unknown row format:", row)
-          return
-        }
-
-        const assignedTo = rowValues[4] || "Unassigned"
-        membersSet.add(assignedTo)
-        const isUserMatch = currentUserRole === "admin" || assignedTo.toLowerCase() === currentUsername.toLowerCase()
-        if (!isUserMatch && currentUserRole !== "admin") return
-
-        const columnGValue = rowValues[6] // Task Start Date
-        const columnKValue = rowValues[10] // Actual Date
-        const columnMValue = rowValues[12] // Status (DONE)
-        const columnPValue = rowValues[15] // Admin Processed Date (Column P)
-
-        // Skip rows marked as DONE in column M for pending tasks only
-        if (columnMValue && columnMValue.toString().trim() === "DONE") {
-          return
-        }
-
-        const rowDateStr = columnGValue ? String(columnGValue).trim() : ""
-        const formattedRowDate = parseGoogleSheetsDateTime(rowDateStr)
-        const googleSheetsRowIndex = rowIndex + 1
-
-        // Create stable unique ID using task ID and row index
-        const taskId = rowValues[1] || ""
-        const stableId = taskId
-          ? `task_${taskId}_${googleSheetsRowIndex}`
-          : `row_${googleSheetsRowIndex}_${Math.random().toString(36).substring(2, 15)}`
-
-        const rowData = {
-          _id: stableId,
-          _rowIndex: googleSheetsRowIndex,
-          _taskId: taskId,
-        }
-
-        const columnHeaders = [
-          { id: "col0", label: "Timestamp", type: "string" },
-          { id: "col1", label: "Task ID", type: "string" },
-          { id: "col2", label: "Firm", type: "string" },
-          { id: "col3", label: "Given By", type: "string" },
-          { id: "col4", label: "Name", type: "string" },
-          { id: "col5", label: "Task Description", type: "string" },
-          { id: "col6", label: "Task Start Date", type: "datetime" },
-          { id: "col7", label: "Freq", type: "string" },
-          { id: "col8", label: "Enable Reminders", type: "string" },
-          { id: "col9", label: "Require Attachment", type: "string" },
-          { id: "col10", label: "Actual", type: "datetime" },
-          { id: "col11", label: "Column L", type: "string" },
-          { id: "col12", label: "Status", type: "string" },
-          { id: "col13", label: "Remarks", type: "string" },
-          { id: "col14", label: "Uploaded Image", type: "string" },
-          { id: "col15", label: "Admin Done", type: "string" }, // Column P
-        ]
-
-        columnHeaders.forEach((header, index) => {
-          const cellValue = rowValues[index]
-          if (
-            header.type === "datetime" ||
-            header.type === "date" ||
-            (cellValue && String(cellValue).startsWith("Date("))
-          ) {
-            rowData[header.id] = cellValue ? parseGoogleSheetsDateTime(String(cellValue)) : ""
-          } else if (header.type === "number" && cellValue !== null && cellValue !== "") {
-            rowData[header.id] = cellValue
-          } else {
-            rowData[header.id] = cellValue !== null ? cellValue : ""
-          }
-        })
-
-        console.log(`Row ${rowIndex}: Task ID = ${rowData.col1}, Google Sheets Row = ${googleSheetsRowIndex}`)
-
-        const hasColumnG = !isEmpty(columnGValue)
-        const isColumnKEmpty = isEmpty(columnKValue)
-
-        // For pending tasks, exclude admin processed items (Column P not empty)
-        if (hasColumnG && isColumnKEmpty && isEmpty(columnPValue)) {
-          const rowDate = parseDateFromDDMMYYYY(formattedRowDate)
-          const isToday = formattedRowDate.startsWith(todayStr)
-          const isTomorrow = formattedRowDate.startsWith(tomorrowStr)
-          const isPastDate = rowDate && rowDate <= today
-          if (isToday || isTomorrow || isPastDate) {
-            pendingAccounts.push(rowData)
-          }
-        }
-        // For history, include ALL completed tasks regardless of Column P status
-        else if (hasColumnG && !isColumnKEmpty) {
-          const isUserHistoryMatch =
-            currentUserRole === "admin" || assignedTo.toLowerCase() === currentUsername.toLowerCase()
-          if (isUserHistoryMatch) {
-            historyRows.push(rowData)
-          }
+          rowData[header.id] = cellValue !== null ? cellValue : ""
         }
       })
 
-      setMembersList(Array.from(membersSet).sort())
-      setAccountData(pendingAccounts)
-      setHistoryData(historyRows)
-      setLoading(false)
-    } catch (error) {
-      console.error("Error fetching sheet data:", error)
-      setError("Failed to load account data: " + error.message)
-      setLoading(false)
-    }
-  }, [])
+      console.log(
+        `Row ${rowIndex}: Task ID = ${rowData.col1}, Google Sheets Row = ${googleSheetsRowIndex}`
+      )
+
+      const hasColumnG = !isEmpty(columnGValue)
+      const isColumnKEmpty = isEmpty(columnKValue)
+
+      // ✅ Pending Tasks (exclude admin processed items)
+      if (hasColumnG && isColumnKEmpty && isEmpty(columnPValue)) {
+        const effectiveDate = rowData.editedStartDate || formattedRowDate
+        const rowDate = parseDateFromDDMMYYYY(effectiveDate)
+
+        const isToday = effectiveDate.startsWith(todayStr)
+        const isTomorrow = effectiveDate.startsWith(tomorrowStr)
+        const isPastDate = rowDate && rowDate <= today
+
+        if (isToday || isTomorrow || isPastDate) {
+          pendingAccounts.push(rowData)
+        }
+      }
+
+      // ✅ History: include ALL completed tasks regardless of Column P
+      else if (hasColumnG && !isColumnKEmpty) {
+        const isUserHistoryMatch =
+          currentUserRole === "admin" || assignedTo.toLowerCase() === currentUsername.toLowerCase()
+        if (isUserHistoryMatch) {
+          historyRows.push(rowData)
+        }
+      }
+    })
+
+    setMembersList(Array.from(membersSet).sort())
+    setAccountData(pendingAccounts)
+    setHistoryData(historyRows)
+    setLoading(false)
+  } catch (error) {
+    console.error("Error fetching sheet data:", error)
+    setError("Failed to load account data: " + error.message)
+    setLoading(false)
+  }
+}, [])
 
   useEffect(() => {
     fetchSheetData()
@@ -1396,13 +1468,13 @@ function AccountDataPage() {
                                 </>
                               ) : (
                                 <>
-                                  <button
-                                    onClick={() => handleEdit(account._id, account["col5"] || "")}
-                                    className="text-blue-600 hover:text-blue-800"
-                                    title="Edit"
-                                  >
-                                    <Edit size={16} />
-                                  </button>
+                                <button
+  onClick={() => handleEdit(account._id, account["col5"] || "", account["col6"] || "")}
+  className="text-blue-600 hover:text-blue-800"
+  title="Edit"
+>
+  <Edit size={16} />
+</button>
                                   <button
                                     onClick={() => handleDelete(account._id)}
                                     className="text-red-600 hover:text-red-800"
@@ -1448,24 +1520,33 @@ function AccountDataPage() {
                               </div>
                             )}
                           </td>
-                          <td className="px-3 py-4 bg-yellow-50 min-w-[140px]">
-                            <div className="text-sm text-gray-900 break-words">
-                              {account["col6"] ? (
-                                <div>
-                                  <div className="font-medium break-words">
-                                    {account["col6"].includes(" ") ? account["col6"].split(" ")[0] : account["col6"]}
-                                  </div>
-                                  {account["col6"].includes(" ") && (
-                                    <div className="text-xs text-gray-500 break-words">
-                                      {account["col6"].split(" ")[1]}
-                                    </div>
-                                  )}
-                                </div>
-                              ) : (
-                                "—"
-                              )}
-                            </div>
-                          </td>
+                        <td className="px-3 py-4 bg-yellow-50 min-w-[140px]">
+  {editingId === account._id ? (
+    <input
+      type="datetime-local"
+      value={editStartDate}
+      onChange={(e) => setEditStartDate(e.target.value)}
+      className="w-full p-2 border border-gray-300 rounded-md text-sm"
+    />
+  ) : (
+    <div className="text-sm text-gray-900 break-words">
+      {account["col6"] ? (
+        <div>
+          <div className="font-medium break-words">
+            {account["col6"].includes(" ") ? account["col6"].split(" ")[0] : account["col6"]}
+          </div>
+          {account["col6"].includes(" ") && (
+            <div className="text-xs text-gray-500 break-words">
+              {account["col6"].split(" ")[1]}
+            </div>
+          )}
+        </div>
+      ) : (
+        "—"
+      )}
+    </div>
+  )}
+</td>
                           <td className="px-3 py-4 min-w-[80px]">
                             <div className="text-sm text-gray-900 break-words">{account["col7"] || "—"}</div>
                           </td>
