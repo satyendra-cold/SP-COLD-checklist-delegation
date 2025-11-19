@@ -1,7 +1,10 @@
+
+
 "use client"
 import { useCallback, useEffect, useState, useMemo } from "react";
 import { format } from 'date-fns';
-import { Search, ChevronDown, Filter } from "lucide-react";
+import { Search, ChevronDown, Filter, Edit2, Trash2, Save, X } from "lucide-react";
+
 
 export default function DelegationPage({
     searchTerm,
@@ -20,12 +23,16 @@ export default function DelegationPage({
         name: false,
         frequency: false
     });
+    const [editingRow, setEditingRow] = useState(null);
+    const [editFormData, setEditFormData] = useState({});
+
 
     // Config should be memoized to prevent unnecessary re-renders
     const CONFIG = useMemo(() => ({
         APPS_SCRIPT_URL: "https://script.google.com/macros/s/AKfycbx426p_teOMVFcMG22RngcroTClA1vB2Z4M1CN9AjAhChiyjVPCO-5wIPM7m6cQHMgx/exec",
         DELEGATION_SHEET: "Delegation"
     }), []);
+
 
     // Format date helper function
     const formatDate = useCallback((dateValue) => {
@@ -37,6 +44,7 @@ export default function DelegationPage({
             return dateValue;
         }
     }, []);
+
 
     // Fetch data with role-based filtering
     const fetchData = useCallback(async () => {
@@ -97,6 +105,147 @@ export default function DelegationPage({
         }
     }, [CONFIG, currentUser, userRole, formatDate]);
 
+
+    // Edit functionality
+    const handleEditClick = useCallback((task) => {
+        setEditingRow(task._id);
+        setEditFormData({ ...task });
+    }, []);
+
+
+    const handleCancelEdit = useCallback(() => {
+        setEditingRow(null);
+        setEditFormData({});
+    }, []);
+
+
+    const handleEditInputChange = useCallback((field, value) => {
+        setEditFormData(prev => ({
+            ...prev,
+            [field]: value
+        }));
+    }, []);
+
+
+    const handleSaveEdit = async (task) => {
+        try {
+            if (!editFormData['Task ID']) {
+                alert('Error: Task ID is missing');
+                return;
+            }
+
+            setLoading(true);
+
+            const formData = new URLSearchParams();
+            formData.append('action', 'updateTask');
+            formData.append('sheetName', CONFIG.DELEGATION_SHEET);
+            formData.append('taskId', editFormData['Task ID']);
+            formData.append('rowData', JSON.stringify({
+                Department: editFormData.Department || '',
+                'Given By': editFormData['Given By'] || '',
+                Name: editFormData.Name || '',
+                'Task Description': editFormData['Task Description'] || '',
+                'Task Start Date': editFormData['Task Start Date'] || '',
+                Freq: editFormData.Freq || '',
+                'Enable Reminders': editFormData['Enable Reminders'] || '',
+                'Require Attachment': editFormData['Require Attachment'] || ''
+            }));
+
+            console.log("Sending update:", formData.toString());
+
+            const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+                method: 'POST',
+                body: formData
+            });
+
+            const text = await response.text();
+            console.log("Response text:", text);
+
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                console.error("JSON parse error:", e);
+                throw new Error("Invalid server response");
+            }
+
+            if (result.success) {
+                setDelegationTasks(prevTasks => 
+                    prevTasks.map(t => 
+                        t._id === task._id ? { ...t, ...editFormData } : t
+                    )
+                );
+                setEditingRow(null);
+                setEditFormData({});
+                alert('Task updated successfully!');
+                setTimeout(() => fetchData(), 500);
+            } else {
+                throw new Error(result.error || 'Update failed');
+            }
+        } catch (err) {
+            console.error("Error:", err);
+            alert(`Error: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
+    // Delete functionality
+    const handleDeleteClick = async (task) => {
+        if (!task['Task ID']) {
+            alert('Error: Task ID is missing');
+            return;
+        }
+
+        const confirmDelete = window.confirm(
+            `Delete this task?\n\nTask ID: ${task['Task ID']}\nTask: ${task['Task Description']}`
+        );
+
+        if (!confirmDelete) return;
+
+        try {
+            setLoading(true);
+
+            const formData = new URLSearchParams();
+            formData.append('action', 'deleteTaskByID');
+            formData.append('sheetName', CONFIG.DELEGATION_SHEET);
+            formData.append('taskId', task['Task ID']);
+
+            console.log("Sending delete:", formData.toString());
+
+            const response = await fetch(CONFIG.APPS_SCRIPT_URL, {
+                method: 'POST',
+                body: formData
+            });
+
+            const text = await response.text();
+            console.log("Response text:", text);
+
+            let result;
+            try {
+                result = JSON.parse(text);
+            } catch (e) {
+                console.error("JSON parse error:", e);
+                throw new Error("Invalid server response");
+            }
+
+            if (result.success) {
+                setDelegationTasks(prevTasks => prevTasks.filter(t => t._id !== task._id));
+                alert('Task deleted successfully!');
+                setTimeout(() => fetchData(), 500);
+            } else {
+                throw new Error(result.error || 'Delete failed');
+            }
+        } catch (err) {
+            console.error("Error:", err);
+            alert(`Error: ${err.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+
     // Sort function
     const requestSort = useCallback((key) => {
         if (loading) return;
@@ -106,6 +255,7 @@ export default function DelegationPage({
         }));
     }, [loading]);
 
+
     // Dropdown toggle
     const toggleDropdown = useCallback((dropdown) => {
         setDropdownOpen(prev => ({
@@ -114,26 +264,31 @@ export default function DelegationPage({
         }));
     }, []);
 
+
     // Filter handlers
     const handleNameFilterSelect = useCallback((name) => {
         setNameFilter(name);
         setDropdownOpen(prev => ({ ...prev, name: false }));
     }, [setNameFilter]);
 
+
     const handleFrequencyFilterSelect = useCallback((freq) => {
         setFreqFilter(freq);
         setDropdownOpen(prev => ({ ...prev, frequency: false }));
     }, [setFreqFilter]);
+
 
     const clearNameFilter = useCallback(() => {
         setNameFilter('');
         setDropdownOpen(prev => ({ ...prev, name: false }));
     }, [setNameFilter]);
 
+
     const clearFrequencyFilter = useCallback(() => {
         setFreqFilter('');
         setDropdownOpen(prev => ({ ...prev, frequency: false }));
     }, [setFreqFilter]);
+
 
     // Memoized derived data
     const { allNames, allFrequencies, filteredTasks } = useMemo(() => {
@@ -164,8 +319,10 @@ export default function DelegationPage({
         return { allNames: names, allFrequencies: freqs, filteredTasks: filtered };
     }, [delegationTasks, nameFilter, freqFilter, searchTerm, sortConfig]);
 
+
     // Table columns config
     const columns = useMemo(() => [
+         { key: null, label: 'Actions', minWidth: 'min-w-[120px]' },
         { key: 'Timestamp', label: 'Timestamp' },
         { key: 'Task ID', label: 'Task ID' },
         { key: 'Department', label: 'Department' },
@@ -176,12 +333,15 @@ export default function DelegationPage({
         { key: 'Freq', label: 'Frequency' },
         { key: 'Enable Reminders', label: 'Reminders' },
         { key: 'Require Attachment', label: 'Attachment' },
+        
     ], []);
+
 
     // Fetch data on mount
     useEffect(() => {
         fetchData();
     }, [fetchData]);
+
 
     if (!currentUser || !userRole) {
         return (
@@ -190,6 +350,7 @@ export default function DelegationPage({
             </div>
         );
     }
+
 
     return (
         <div className="mt-4 rounded-lg border border-purple-200 shadow-md bg-white overflow-hidden">
@@ -225,7 +386,7 @@ export default function DelegationPage({
                                 <th
                                     key={column.label}
                                     className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider ${column.bg || ''} ${column.minWidth || ''} ${column.key ? 'cursor-pointer hover:bg-gray-100' : ''}`}
-                                    onClick={() => requestSort(column.key)}
+                                    onClick={() => column.key && requestSort(column.key)}
                                 >
                                     <div className="flex items-center">
                                         {column.label}
@@ -253,44 +414,173 @@ export default function DelegationPage({
                         ) : filteredTasks.length > 0 ? (
                             filteredTasks.map((task) => (
                                 <tr key={task._id} className="hover:bg-gray-50">
+                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                        {editingRow === task._id ? (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleSaveEdit(task)}
+                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                                                    title="Save"
+                                                >
+                                                    <Save size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={handleCancelEdit}
+                                                    className="p-1.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                                                    title="Cancel"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center gap-2">
+                                                <button
+                                                    onClick={() => handleEditClick(task)}
+                                                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                    title="Edit"
+                                                    disabled={loading}
+                                                >
+                                                    <Edit2 size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => handleDeleteClick(task)}
+                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                                                    title="Delete"
+                                                    disabled={loading}
+                                                >
+                                                    <Trash2 size={18} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task.Timestamp || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData.Timestamp || ''}
+                                                onChange={(e) => handleEditInputChange('Timestamp', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                disabled
+                                            />
+                                        ) : (
+                                            task.Timestamp || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                                         {task['Task ID'] || "—"}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task.Department || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData.Department || ''}
+                                                onChange={(e) => handleEditInputChange('Department', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task.Department || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task['Given By'] || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData['Given By'] || ''}
+                                                onChange={(e) => handleEditInputChange('Given By', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task['Given By'] || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task.Name || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData.Name || ''}
+                                                onChange={(e) => handleEditInputChange('Name', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task.Name || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-500 min-w-[300px] max-w-[400px]">
-                                        <div className="whitespace-normal break-words">
-                                            {task['Task Description'] || "—"}
-                                        </div>
+                                        {editingRow === task._id ? (
+                                            <textarea
+                                                value={editFormData['Task Description'] || ''}
+                                                onChange={(e) => handleEditInputChange('Task Description', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                                rows={3}
+                                            />
+                                        ) : (
+                                            <div className="whitespace-normal break-words">
+                                                {task['Task Description'] || "—"}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 bg-yellow-50">
-                                        {task['Task Start Date'] || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData['Task Start Date'] || ''}
+                                                onChange={(e) => handleEditInputChange('Task Start Date', e.target.value)}
+                                                placeholder="DD/MM/YYYY"
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task['Task Start Date'] || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        <span className={`px-2 py-1 rounded-full text-xs ${task.Freq === 'Daily' ? 'bg-blue-100 text-blue-800' :
-                                            task.Freq === 'Weekly' ? 'bg-green-100 text-green-800' :
-                                                task.Freq === 'Monthly' ? 'bg-purple-100 text-purple-800' :
-                                                    'bg-gray-100 text-gray-800'
-                                            }`}>
-                                            {task.Freq || "—"}
-                                        </span>
+                                        {editingRow === task._id ? (
+                                            <select
+                                                value={editFormData.Freq || ''}
+                                                onChange={(e) => handleEditInputChange('Freq', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            >
+                                                <option value="">Select</option>
+                                                <option value="Daily">Daily</option>
+                                                <option value="Weekly">Weekly</option>
+                                                <option value="Monthly">Monthly</option>
+                                                <option value="Yearly">Yearly</option>
+                                                <option value="One Time">One Time</option>
+                                            </select>
+                                        ) : (
+                                            <span className={`px-2 py-1 rounded-full text-xs ${task.Freq === 'Daily' ? 'bg-blue-100 text-blue-800' :
+                                                task.Freq === 'Weekly' ? 'bg-green-100 text-green-800' :
+                                                    task.Freq === 'Monthly' ? 'bg-purple-100 text-purple-800' :
+                                                        'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                {task.Freq || "—"}
+                                            </span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task['Enable Reminders'] || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData['Enable Reminders'] || ''}
+                                                onChange={(e) => handleEditInputChange('Enable Reminders', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task['Enable Reminders'] || "—"
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {task['Require Attachment'] || "—"}
+                                        {editingRow === task._id ? (
+                                            <input
+                                                type="text"
+                                                value={editFormData['Require Attachment'] || ''}
+                                                onChange={(e) => handleEditInputChange('Require Attachment', e.target.value)}
+                                                className="w-full px-2 py-1 border border-purple-300 rounded focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                            />
+                                        ) : (
+                                            task['Require Attachment'] || "—"
+                                        )}
                                     </td>
+                                   
                                 </tr>
                             ))
                         ) : (

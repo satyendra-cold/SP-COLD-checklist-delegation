@@ -12,6 +12,7 @@ import AccountDataPage from "./pages/delegation"
 import "./index.css"
 import QuickTask from "./pages/QuickTask"
 import License from "./pages/License"
+import Calendar from './pages/Calendar'
 import TrainingVideo from "./pages/TrainingVideo"
 // Auth wrapper component to protect routes
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
@@ -117,6 +118,14 @@ function App() {
             </ProtectedRoute>
           }
         />
+        <Route
+  path="/dashboard/calendar"
+  element={
+    <ProtectedRoute>
+      <Calendar />
+    </ProtectedRoute>
+  }
+/>
 
         <Route
           path="/dashboard/license"
@@ -155,6 +164,7 @@ function App() {
         <Route path="/admin/license" element={<Navigate to="/dashboard/license" replace />} />
         <Route path="/admin/traning-video" element={<Navigate to="/dashboard/traning-video" replace />} />
         <Route path="/user/*" element={<Navigate to="/dashboard/admin" replace />} />
+        <Route path="/admin/calendar" element={<Navigate to="/dashboard/calendar" replace />} />
       </Routes>
     </Router>
   )

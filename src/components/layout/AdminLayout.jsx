@@ -1,8 +1,10 @@
+
+
 "use client"
 
 import { useState, useEffect } from "react"
-import { Link, useLocation, useNavigate } from "react-router-dom"
-import { CheckSquare, ClipboardList, Home, LogOut, Menu, Database, ChevronDown, ChevronRight, Zap, FileText, X, Play, Pause, KeyRound, Video } from 'lucide-react'
+import { href, Link, useLocation, useNavigate } from "react-router-dom"
+import { CheckSquare, ClipboardList, Home, LogOut, Menu, Database, ChevronDown, ChevronRight, Zap, FileText, X, Play, Pause, KeyRound, Video, CirclePlus, UserRound, CalendarCheck, BookmarkCheck ,Calendar } from 'lucide-react'
 
 export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   const location = useLocation()
@@ -11,13 +13,19 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   const [isDataSubmenuOpen, setIsDataSubmenuOpen] = useState(false)
   const [isLicenseModalOpen, setIsLicenseModalOpen] = useState(false)
   const [username, setUsername] = useState("")
+  const [displayName, setDisplayName] = useState("") // Added for display name
   const [userRole, setUserRole] = useState("")
   const [isVideoPlaying, setIsVideoPlaying] = useState(false)
+  const [isUserPopupOpen, setIsUserPopupOpen] = useState(false)
+  const [userEmail, setUserEmail] = useState("")
+
 
   // Check authentication on component mount
   useEffect(() => {
     const storedUsername = sessionStorage.getItem('username')
     const storedRole = sessionStorage.getItem('role')
+    const storedEmail = sessionStorage.getItem('email')
+    const storedDisplayName = sessionStorage.getItem('displayName') // Get display name
 
     if (!storedUsername) {
       // Redirect to login if not authenticated
@@ -26,30 +34,24 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
     }
 
     setUsername(storedUsername)
+    setDisplayName(storedDisplayName || storedUsername) // Use displayName if available
     setUserRole(storedRole || "user")
+    setUserEmail(storedEmail || "")
   }, [navigate])
 
   // Handle logout
   const handleLogout = () => {
     sessionStorage.removeItem('username')
+    sessionStorage.removeItem('displayName')
     sessionStorage.removeItem('role')
     sessionStorage.removeItem('department')
+    sessionStorage.removeItem('email')
     navigate("/login")
   }
 
   // Filter dataCategories based on user role
   const dataCategories = [
-    //{ id: "main", name: "PURAB", link: "/dashboard/data/main" },
     { id: "sales", name: "Checklist", link: "/dashboard/data/sales" },
-    // { id: "service", name: "Service", link: "/dashboard/data/service" },
-    //{ id: "account", name: "RKL", link: "/dashboard/data/account" },
-    //{ id: "warehouse", name: "REFRASYNTH", link: "/dashboard/data/warehouse" },
-    //{ id: "delegation", name: "Delegation", link: "/dashboard/data/delegation" },
-    //{ id: "purchase", name: "Slag Crusher", link: "/dashboard/data/purchase" },
-    //{ id: "director", name: "Hr", link: "/dashboard/data/director" },
-    //{ id: "managing-director", name: "PURAB", link: "/dashboard/data/managing-director" },
-    // { id: "coo", name: "COO", link: "/dashboard/data/coo" },
-    // { id: "jockey", name: "Jockey", link: "/dashboard/data/jockey" },
   ]
 
   // Update the routes array based on user role
@@ -59,29 +61,28 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
       label: "Dashboard",
       icon: Database,
       active: location.pathname === "/dashboard/admin",
-      showFor: ["admin", "user"] // Show for both roles
+      showFor: ["admin", "user"]
     },
     {
       href: "/dashboard/quick-task",
       label: "Quick Task",
       icon: Zap,
       active: location.pathname === "/dashboard/quick-task",
-      showFor: ["admin", "user"] // Only show for admin
+      showFor: ["admin"]
     },
     {
       href: "/dashboard/assign-task",
       label: "Assign Task",
       icon: CheckSquare,
       active: location.pathname === "/dashboard/assign-task",
-      showFor: ["admin"] // Only show for admin
+      showFor: ["admin"]
     },
-
     {
       href: "/dashboard/delegation",
       label: "Delegation",
       icon: ClipboardList,
       active: location.pathname === "/dashboard/delegation",
-      showFor: ["admin", "user"] // Only show for admin
+      showFor: ["admin", "user"]
     },
     {
       href: "#",
@@ -89,23 +90,29 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
       icon: Database,
       active: location.pathname.includes("/dashboard/data"),
       submenu: true,
-      showFor: ["admin", "user"] // Show for both roles
+      showFor: ["admin", "user"]
     },
+    {
+      href: "/dashboard/calendar",
+      label: "Calendar",
+      icon: Calendar,
+      active: location.pathname === "/dashboard/calendar",
+      showFor: ["admin", "user"]
 
+    },
     {
       href: "/dashboard/license",
       label: "License",
       icon: KeyRound,
       active: location.pathname === "/dashboard/license",
-      showFor: ["admin", "user"] // show both
+      showFor: ["admin", "user"]
     },
-
     {
       href: "/dashboard/traning-video",
       label: "Training Video",
       icon: Video,
       active: location.pathname === "/dashboard/traning-video",
-      showFor: ["admin", "user"] //  show both
+      showFor: ["admin", "user"]
     },
   ]
 
@@ -137,177 +144,6 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
   // Get accessible routes and departments
   const accessibleRoutes = getAccessibleRoutes()
   const accessibleDepartments = getAccessibleDepartments()
-
-  // License Modal Component
-  const LicenseModal = () => {
-    // Function to convert YouTube URL to embed URL
-    const getYouTubeEmbedUrl = (url) => {
-      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
-      const match = url.match(regExp);
-      return match && match[2].length === 11
-        ? `https://www.youtube.com/embed/${match[2]}?autoplay=1&rel=0`
-        : url;
-    };
-
-    // const videoUrl = userRole === "admin"
-    //   ? "https://youtu.be/v2yqJc1CKBA?si=J_r0PAIlGOqkHsz3"
-    //   : "https://youtu.be/UL-EZE3c_pA"
-
-    // const embedUrl = getYouTubeEmbedUrl(videoUrl);
-
-    // const handleVideoToggle = () => {
-    //   setIsVideoPlaying(!isVideoPlaying)
-    // }
-
-    // return (
-    //   <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-    //     <div className="bg-white rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden">
-    //       {/* Modal Header */}
-    //       <div className="flex items-center justify-between p-4 border-b border-gray-200">
-    //         <h2 className="text-xl font-semibold text-gray-800">License & Help</h2>
-    //         <button
-    //           onClick={() => {
-    //             setIsLicenseModalOpen(false);
-    //             setIsVideoPlaying(false);
-    //           }}
-    //           className="text-gray-500 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100"
-    //         >
-    //           <X className="h-5 w-5" />
-    //         </button>
-    //       </div>
-
-    //       {/* Modal Content */}
-    //       <div className="flex h-[80vh]">
-    //         {/* Left Section - License Terms */}
-    //         <div className="w-1/2 p-6 overflow-y-auto border-r border-gray-200">
-    //           <h3 className="text-lg font-semibold text-gray-800 mb-4">License Terms & Conditions</h3>
-    //           <div className="text-sm text-gray-600 space-y-4">
-    //             <p className="font-medium text-gray-800">SOFTWARE LICENSE AGREEMENT</p>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">1. Grant of License</h4>
-    //               <p>Subject to the terms and conditions of this Agreement, we grant you a non-exclusive, non-transferable license to use the Checklist & Delegation software for your internal business operations.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">2. Restrictions</h4>
-    //               <p>You may not: (a) modify, adapt, or create derivative works; (b) reverse engineer, decompile, or disassemble the software; (c) distribute, sublicense, or transfer the software to third parties; (d) use the software for any unlawful purpose.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">3. Data Protection & Privacy</h4>
-    //               <p>We implement industry-standard security measures to protect your data. Your information is processed in accordance with applicable data protection laws including GDPR and other privacy regulations.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">4. Intellectual Property</h4>
-    //               <p>All intellectual property rights in the software remain with the licensor. This license does not grant you any rights to trademarks, copyrights, or patents.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">5. Limitation of Liability</h4>
-    //               <p>The software is provided "as is" without warranty of any kind. We shall not be liable for any indirect, incidental, special, or consequential damages arising from the use of this software.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">6. Support & Updates</h4>
-    //               <p>Technical support is provided during business hours. Software updates and patches will be delivered automatically to ensure optimal performance and security.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">7. Termination</h4>
-    //               <p>This license is effective until terminated. It may be terminated by either party with 30 days written notice. Upon termination, you must cease all use of the software.</p>
-    //             </div>
-
-    //             <div>
-    //               <h4 className="font-medium text-gray-700 mb-2">8. Governing Law</h4>
-    //               <p>This Agreement shall be governed by and construed in accordance with the laws of the jurisdiction in which the software is used.</p>
-    //             </div>
-
-    //             <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-    //               <p className="text-sm text-blue-800">
-    //                 <strong>Contact Information:</strong><br />
-    //                 For license inquiries or technical support, please contact our support team at support@botivate.in
-    //               </p>
-    //             </div>
-    //           </div>
-    //         </div>
-
-    //         {/* Right Section - Help Video */}
-    //         <div className="w-1/2 p-6">
-    //           <h3 className="text-lg font-semibold text-gray-800 mb-4">
-    //             Help Video {userRole === "admin" ? "(Admin Guide)" : "(User Guide)"}
-    //           </h3>
-    //           <div className="space-y-4">
-    //             <div className="bg-gray-100 rounded-lg overflow-hidden">
-    //               {!isVideoPlaying ? (
-    //                 <div className="h-64 flex items-center justify-center">
-    //                   <div className="text-center">
-    //                     <button
-    //                       onClick={handleVideoToggle}
-    //                       className="bg-red-600 hover:bg-red-700 text-white rounded-full p-4 mb-4 transition-colors"
-    //                     >
-    //                       <Play className="h-8 w-8" />
-    //                     </button>
-    //                     <p className="text-gray-600">
-    //                       Click to play {userRole === "admin" ? "Admin" : "User"} Help Video
-    //                     </p>
-    //                     <p className="text-xs text-gray-500 mt-2">
-    //                       YouTube Video Tutorial
-    //                     </p>
-    //                   </div>
-    //                 </div>
-    //               ) : (
-    //                 <div className="relative">
-    //                   <iframe
-    //                     width="100%"
-    //                     height="315"
-    //                     src={embedUrl}
-    //                     title="YouTube video player"
-    //                     frameBorder="0"
-    //                     allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-    //                     allowFullScreen
-    //                     className="rounded-lg"
-    //                   ></iframe>
-    //                   <button
-    //                     onClick={handleVideoToggle}
-    //                     className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-2 transition-colors"
-    //                   >
-    //                     <X className="h-4 w-4" />
-    //                   </button>
-    //                 </div>
-    //               )}
-    //             </div>
-
-    //             <div className="text-sm text-gray-600">
-    //               <h4 className="font-medium text-gray-700 mb-2">What you'll learn:</h4>
-    //               <ul className="space-y-1 ml-4">
-    //                 {userRole === "admin" ? (
-    //                   <>
-    //                     <li>• Managing user accounts and permissions</li>
-    //                     <li>• Creating and assigning tasks</li>
-    //                     <li>• Monitoring system performance</li>
-    //                     <li>• Generating reports and analytics</li>
-    //                     <li>• System configuration and settings</li>
-    //                   </>
-    //                 ) : (
-    //                   <>
-    //                     <li>• Navigating the dashboard</li>
-    //                     <li>• Completing assigned tasks</li>
-    //                     <li>• Using the checklist system</li>
-    //                     <li>• Updating task status</li>
-    //                     <li>• Accessing delegation features</li>
-    //                   </>
-    //                 )}
-    //               </ul>
-    //             </div>
-    //           </div>
-    //         </div>
-    //       </div>
-    //     </div>
-    //   </div>
-    // )
-  }
 
   return (
     <div className={`flex h-screen overflow-hidden bg-gradient-to-br from-blue-50 to-purple-50`}>
@@ -377,26 +213,18 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-                <span className="text-sm font-medium text-white">{username ? username.charAt(0).toUpperCase() : 'U'}</span>
+                <span className="text-sm font-medium text-white">{displayName ? displayName.charAt(0).toUpperCase() : 'U'}</span>
               </div>
               <div>
                 <p className="text-sm font-medium text-blue-700">
-                  {username || "User"} {userRole === "admin" ? "(Admin)" : ""}
+                  {displayName || "User"} {userRole === "admin" ? "(Admin)" : ""}
                 </p>
                 <p className="text-xs text-blue-600">
-                  {username ? `${username.toLowerCase()}@example.com` : "user@example.com"}
+                  {userEmail || "user@example.com"}
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              {/* <button
-                onClick={() => setIsLicenseModalOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-                title="License & Help"
-              >
-                <FileText className="h-4 w-4" />
-                <span className="text-xs font-medium">License</span>
-              </button> */}
               {toggleDarkMode && (
                 <button
                   onClick={toggleDarkMode}
@@ -513,27 +341,18 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="h-8 w-8 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
-                    <span className="text-sm font-medium text-white">{username ? username.charAt(0).toUpperCase() : 'U'}</span>
+                    <span className="text-sm font-medium text-white">{displayName ? displayName.charAt(0).toUpperCase() : 'U'}</span>
                   </div>
                   <div>
                     <p className="text-sm font-medium text-blue-700">
-                      {username || "User"} {userRole === "admin" ? "(Admin)" : ""}
+                      {displayName || "User"} {userRole === "admin" ? "(Admin)" : ""}
                     </p>
                     <p className="text-xs text-blue-600">
-                      {username ? `${username.toLowerCase()}@example.com` : "user@example.com"}
+                      {userEmail || "user@example.com"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  {/* <button
-                    onClick={() => setIsLicenseModalOpen(true)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-md shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-1"
-                    title="License & Help"
-                  >
-                    <FileText className="h-3 w-3" />
-                    <span className="text-xs font-medium">License</span>
-                  </button>
-                  */}
                   {toggleDarkMode && (
                     <button
                       onClick={toggleDarkMode}
@@ -565,39 +384,124 @@ export default function AdminLayout({ children, darkMode, toggleDarkMode }) {
         </div>
       )}
 
-      {/* License Modal */}
-      {isLicenseModalOpen && <LicenseModal />}
-
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         <header className="flex h-14 items-center justify-between border-b border-blue-200 bg-white px-4 md:px-6">
           <div className="flex md:hidden w-8"></div>
-          <h1 className="text-lg font-semibold text-blue-700">Checklist & Delegation</h1>
-          {/*<button
-            onClick={() => setIsLicenseModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 flex items-center gap-2"
-            title="License & Help"
-          >
-            <FileText className="h-4 w-4" />
-            <span className="text-sm font-medium">License</span>
-          </button>
-          */}
+          <h1 className="text-lg font-semibold text-blue-700">
+            Welcome, {displayName || username || "User"}!
+          </h1>
         </header>
-        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gradient-to-br from-blue-50 to-purple-50">
+        <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-gradient-to-br from-blue-50 to-purple-50 pb-20 md:pb-6">
           {children}
-          <div className="fixed md:left-64 left-0 right-0 bottom-0 py-1 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-center text-sm shadow-md z-10">
+
+          {/* Footer with Role-Based Mobile Navigation */}
+          <div className="fixed md:left-64 left-0 right-0 bottom-0 py-2 px-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white text-center text-sm shadow-lg z-50">
+            {/* Mobile Navigation Icons - Role-Based Access */}
+            <div className="sm:hidden flex justify-around items-center gap-2 mb-2">
+              {/* Home - Admin only */}
+              {userRole === "admin" && (
+                <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
+                  <Link
+                    to="/dashboard/admin"
+                    className={location.pathname === "/dashboard/admin" ? "bg-white/20" : ""}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <Home size={24} className="drop-shadow-md" />
+                  </Link>
+                </div>
+              )}
+
+              {/* Checklist - Both Admin and User */}
+              <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
+                <Link
+                  to="/dashboard/data/sales"
+                  className={location.pathname === "/dashboard/data/sales" ? "bg-white/20" : ""}
+                >
+                  <CalendarCheck size={24} className="drop-shadow-md" />
+                </Link>
+              </div>
+
+              {/* Assign Task - Admin only */}
+              {userRole === "admin" && (
+                <div className="p-3 rounded-full bg-white text-purple-600 hover:bg-purple-100 transition-all duration-300 cursor-pointer transform hover:scale-110 shadow-lg -mt-8">
+                  <Link to="/dashboard/assign-task">
+                    <CirclePlus size={28} className="drop-shadow-md" />
+                  </Link>
+                </div>
+              )}
+
+              {/* Delegation - Both Admin and User */}
+              <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
+                <Link
+                  to="/dashboard/delegation"
+                  className={location.pathname === "/dashboard/delegation" ? "bg-white/20" : ""}
+                >
+                  <BookmarkCheck size={24} className="drop-shadow-md" />
+                </Link>
+              </div>
+
+              {/* Profile - Both Admin and User */}
+              <div className="p-2 rounded-full hover:bg-white/20 transition-all duration-300 cursor-pointer transform hover:scale-110">
+                <div onClick={() => setIsUserPopupOpen(true)}>
+                  <UserRound size={24} className="drop-shadow-md" />
+                </div>
+              </div>
+            </div>
+
+            {/* Powered by text */}
             <a
-              href="https://www.botivate.in/" // Replace with actual URL
+              href="https://www.botivate.in/"
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline"
+              className="hover:underline flex items-center justify-center gap-1 transition-colors duration-300"
             >
-              Powered by-<span className="font-semibold">Botivate</span>
+              Powered by-<span className="font-bold drop-shadow-md">Botivate</span>
             </a>
           </div>
         </main>
-      </div>
 
+        {/* User Popup Modal for Mobile */}
+        {isUserPopupOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+            <div className="bg-white rounded-lg p-6 w-80 shadow-xl">
+              <div className="flex flex-col items-center justify-between">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="h-20 w-20 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 flex items-center justify-center">
+                    <span className="text-3xl font-medium text-white">
+                      {displayName ? displayName.charAt(0).toUpperCase() : "U"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-blue-700 text-center">
+                      {displayName || "User"} {userRole === "admin" ? "(Admin)" : ""}
+                    </p>
+                    <p className="text-xs text-blue-600 text-center">
+                      {userEmail || "user@example.com"}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-around w-full gap-2 mt-4">
+                  <button
+                    onClick={() => setIsUserPopupOpen(false)}
+                    className="outline p-2 rounded-md px-4"
+                  >
+                    <span className="flex justify-center items-center">Cancel</span>
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="bg-blue-700 text-white hover:bg-blue-900 p-2 rounded-md px-4"
+                  >
+                    <span className="flex justify-center items-center gap-2">
+                      Log out <LogOut className="h-4 w-4" />
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

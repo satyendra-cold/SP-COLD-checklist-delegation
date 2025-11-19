@@ -16,6 +16,8 @@ const LoginPage = () => {
     password: "",
   })
   const [toast, setToast] = useState({ show: false, message: "", type: "" })
+  const [showSuccessPopup, setShowSuccessPopup] = useState(false);
+
 
   // Function to check if a role is any variation of "inactive"
   const isInactiveRole = (role) => {
@@ -182,11 +184,21 @@ const LoginPage = () => {
             console.log("USER LOGIN - Setting restricted access");
           }
 
-          // Navigate to dashboard
-          navigate("/dashboard/admin")
+        // Show success popup
+setShowSuccessPopup(true);
 
-          showToast(`Login successful. Welcome, ${trimmedUsername}!`, "success")
-          return
+// After 2 seconds, navigate to dashboard
+setTimeout(() => {
+  if (isAdmin) {
+    navigate("/dashboard/admin");
+  } else {
+    navigate("/dashboard/delegation");
+  }
+}, 2000);
+
+showToast(`Login successful. Welcome, ${trimmedUsername}!`, "success")
+return
+
         } else {
           showToast("Username or password is incorrect. Please try again.", "error")
         }
@@ -293,6 +305,51 @@ const LoginPage = () => {
           {toast.message}
         </div>
       )}
+      {/* Success Popup Modal */}
+{showSuccessPopup && (
+  <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+    <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl transform transition-all duration-300 scale-100 opacity-100">
+      <div className="text-center">
+        <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-green-100">
+          <svg
+            className="h-6 w-6 text-green-600"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M5 13l4 4L19 7"
+            />
+          </svg>
+        </div>
+        <h3 className="mt-3 text-lg font-medium text-gray-900">
+          Login Successful!
+        </h3>
+        <div className="mt-2 px-4 py-3">
+          <p className="text-xl text-gray-600">
+            Welcome{" "}
+            <span className="font-semibold text-blue-600">
+              {formData.username.trim().toLowerCase()}
+            </span>
+            , you have successfully logged in.
+          </p>
+        </div>
+        <div className="mt-4">
+          <div className="flex justify-center">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+          </div>
+          <p className="text-xs text-gray-500 mt-2">
+            Redirecting to {masterData.userRoles[formData.username.trim().toLowerCase()] === "admin" ? "Dashboard..." : "Delegation..."}
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+)}
+
     </div>
   )
 }
